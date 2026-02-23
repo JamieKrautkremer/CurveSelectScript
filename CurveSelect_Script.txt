@@ -1,0 +1,129 @@
+import maya.cmds as cmds
+import maya.mel as mel
+
+WINDOW_NAME = "animChannelFilterUI"
+
+ACTIVE_ATTRS = set()
+BUTTONS = {}
+
+ACTIVE_COLOR = (0.3, 0.6, 0.3)   # Green-ish when active
+DEFAULT_COLOR = (0.2, 0.2, 0.2)  # Dark gray default
+
+
+def update_graph_editor():
+    selected_objs = cmds.ls(selection=True)
+
+    if not selected_objs:
+        cmds.warning("No objects selected.")
+        return
+
+    attrs_to_select = []
+
+    for obj in selected_objs:
+        for attr in ACTIVE_ATTRS:
+            full_attr = "{}.{}".format(obj, attr)
+            if cmds.objExists(full_attr):
+                connections = cmds.listConnections(full_attr, type="animCurve")
+                if connections:
+                    attrs_to_select.append(full_attr)
+
+    mel.eval('selectionConnection -e -clear graphEditor1FromOutliner;')
+
+    for attr in attrs_to_select:
+        mel.eval('selectionConnection -e -select "{}" graphEditor1FromOutliner;'.format(attr))
+
+
+def update_button_colors():
+    for attr, btn in BUTTONS.items():
+        if cmds.button(btn, exists=True):
+            if attr in ACTIVE_ATTRS:
+                cmds.button(btn, edit=True, backgroundColor=ACTIVE_COLOR)
+            else:
+                cmds.button(btn, edit=True, backgroundColor=DEFAULT_COLOR)
+
+
+def toggle_attr(attr):
+    global ACTIVE_ATTRS
+
+    modifiers = cmds.getModifiers()
+    shift_held = modifiers & 1
+
+    if not shift_held:
+        ACTIVE_ATTRS.clear()
+
+    if attr in ACTIVE_ATTRS:
+        ACTIVE_ATTRS.remove(attr)
+    else:
+        ACTIVE_ATTRS.add(attr)
+
+    update_button_colors()
+    update_graph_editor()
+
+
+def toggle_multi(attrs):
+    global ACTIVE_ATTRS
+
+    modifiers = cmds.getModifiers()
+    shift_held = modifiers & 1
+
+    if not shift_held:
+        ACTIVE_ATTRS.clear()
+
+    for attr in attrs:
+        ACTIVE_ATTRS.add(attr)
+
+    update_button_colors()
+    update_graph_editor()
+
+
+def clear_filter():
+    global ACTIVE_ATTRS
+    ACTIVE_ATTRS.clear()
+    mel.eval('selectionConnection -e -clear graphEditor1FromOutliner;')
+    update_button_colors()
+
+
+def make_row(label, base):
+    cmds.text(label=label)
+    cmds.rowLayout(numberOfColumns=4)
+
+    for axis in ["X", "Y", "Z"]:
+        attr = base + axis
+        btn = cmds.button(
+            label=axis,
+            height=30,
+            backgroundColor=DEFAULT_COLOR,
+            command=lambda x, a=attr: toggle_attr(a)
+        )
+        BUTTONS[attr] = btn
+
+    cmds.button(
+        label="XYZ",
+        height=30,
+        command=lambda x: toggle_multi([base+"X", base+"Y", base+"Z"])
+    )
+
+    cmds.setParent("..")
+    cmds.separator(height=8, style="in")
+
+
+def build_ui():
+    if cmds.window(WINDOW_NAME, exists=True):
+        cmds.deleteUI(WINDOW_NAME)
+
+    window = cmds.window(WINDOW_NAME, title="Graph Channel Filter", sizeable=False)
+
+    cmds.columnLayout(adjustableColumn=True, rowSpacing=5)
+
+    make_row("Translate", "translate")
+    make_row("Rotate", "rotate")
+    make_row("Scale", "scale")
+
+    cmds.separator(height=10, style="in")
+
+    cmds.button(label="Clear Filter", height=35, command=lambda x: clear_filter())
+
+    cmds.showWindow(window)
+
+
+build_ui()
