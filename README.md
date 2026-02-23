@@ -1,2 +1,2 @@
 # CurveSelectScript
-Just a place to store this script file I made for Maya
+Create a custom shelf button and add this Python script to the command. Enjoy
