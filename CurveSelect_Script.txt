@@ -10,6 +10,28 @@ ACTIVE_COLOR = (0.3, 0.6, 0.3)   # Green-ish when active
 DEFAULT_COLOR = (0.2, 0.2, 0.2)  # Dark gray default
 
 
+def _get_active_anim_layer():
+    """Return the active (best for keying) animation layer, or None if no layers / no active layer."""
+    try:
+        result = cmds.animLayer(query=True, bestAnimLayer=True)
+        if result:
+            return result[0] if isinstance(result, (list, tuple)) else result
+    except Exception:
+        pass
+    return None
+
+
+def _get_curve_for_plug_on_layer(layer, full_attr):
+    """Return the anim curve for the given plug on the given layer, or None."""
+    try:
+        if not cmds.objExists(full_attr):
+            return None
+        curve = cmds.animLayer(layer, query=True, findCurveForPlug=full_attr)
+        return curve
+    except Exception:
+        return None
+
+
 def update_graph_editor():
     selected_objs = cmds.ls(selection=True)
 
@@ -18,14 +40,25 @@ def update_graph_editor():
         return
 
     attrs_to_select = []
+    active_layer = _get_active_anim_layer()
 
-    for obj in selected_objs:
-        for attr in ACTIVE_ATTRS:
-            full_attr = "{}.{}".format(obj, attr)
-            if cmds.objExists(full_attr):
-                connections = cmds.listConnections(full_attr, type="animCurve")
-                if connections:
+    if active_layer:
+        # Multiple animation layers: only show curves on the active layer
+        for obj in selected_objs:
+            for attr in ACTIVE_ATTRS:
+                full_attr = "{}.{}".format(obj, attr)
+                curve = _get_curve_for_plug_on_layer(active_layer, full_attr)
+                if curve:
                     attrs_to_select.append(full_attr)
+    else:
+        # No animation layers (or base only): use direct animCurve connection
+        for obj in selected_objs:
+            for attr in ACTIVE_ATTRS:
+                full_attr = "{}.{}".format(obj, attr)
+                if cmds.objExists(full_attr):
+                    connections = cmds.listConnections(full_attr, type="animCurve")
+                    if connections:
+                        attrs_to_select.append(full_attr)
 
     mel.eval('selectionConnection -e -clear graphEditor1FromOutliner;')
 
